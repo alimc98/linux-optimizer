@@ -93,15 +93,29 @@ jobs:
           test -s /etc/sysctl.d/99-linux-optimizer.conf
           test -s /etc/security/limits.d/99-linux-optimizer.conf
           ( test -s /etc/ssh/sshd_config.d/99-linux-optimizer.conf || grep -q 'Linux Optimizer' /etc/ssh/sshd_config )
-          # A non-privileged container cannot write most of /proc/sys, so
-          # "permission denied" is expected here (the script itself reports those
-          # and keeps going). What must NOT happen is an unknown/unparsable key.
-          sysctl -p /etc/sysctl.d/99-linux-optimizer.conf 2>&1 | tee /tmp/sys.out
-          if grep -viE 'permission denied|cannot allocate|No such file|unknown key' /tmp/sys.out | grep -qiE 'error|invalid'; then
-            echo "unexpected sysctl parse error"; exit 1
+          # An unprivileged container has most of /proc/sys mounted read-only,
+          # lacks some netns-scoped keys and rejects others with EINVAL, so
+          # per-key errors here are EXPECTED (the module itself reports and
+          # continues for exactly this reason). What we do insist on:
+          #   - the file parses (no "bad line"/"garbage" from procps),
+          #   - we never write a key that is read-only in mainline,
+          #   - where the kernel does let us write, our value actually lands.
+          sysctl -e -p /etc/sysctl.d/99-linux-optimizer.conf >/tmp/sys.out 2>&1 || true
+          if grep -qiE 'bad line|garbage|syntax' /tmp/sys.out; then
+            cat /tmp/sys.out; echo "malformed sysctl drop-in"; exit 1
           fi
           if grep -q 'tcp_available_congestion_control' /tmp/sys.out; then
             echo "we must never write the read-only available_congestion_control"; exit 1
+          fi
+          # Positive check, only when the container is actually able to apply it.
+          if [ -w /proc/sys/net/ipv4/tcp_fin_timeout ]; then
+            want=$(awk -F= '/^net.ipv4.tcp_fin_timeout/{gsub(/ /,"",$2); print $2}' \
+                   /etc/sysctl.d/99-linux-optimizer.conf)
+            got=$(sysctl -n net.ipv4.tcp_fin_timeout)
+            [ "$want" = "$got" ] || { echo "tcp_fin_timeout: wanted $want, kernel says $got"; exit 1; }
+            echo "sysctl values applied and verified"
+          else
+            echo "sysctl application not verifiable in this container (read-only /proc/sys)"
           fi
           sshd -t
           echo "drop-ins verified on ${{ matrix.name }}"

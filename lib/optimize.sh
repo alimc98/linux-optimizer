@@ -393,7 +393,7 @@ sysctl_optimizations() {
     if have_cmd sysctl; then
         local out failed
         out="$(sysctl --system 2>&1 || true)"
-        failed="$(printf '%s\n' "$out" | grep -iE 'cannot allocate|permission denied|No such file|unknown key' | head -10)"
+        failed="$(printf '%s\n' "$out" | grep -iE 'cannot allocate|permission denied|No such file|unknown key|invalid argument|cannot stat' | head -10)"
         if [[ -n "$failed" ]]; then
             note_msg "Some sysctl keys were rejected (normal in containers / on kernels without them):"
             printf '%s\n' "$failed" | while IFS= read -r l; do note_msg "  $l"; done
