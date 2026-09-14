@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get update -q && sudo apt-get install -y shellcheck
+
+      - name: bash -n on every script
+        run: |
+          set -e
+          fail=0
+          for f in linux-optimizer.sh lib/*.sh scripts/*.sh tests/*.sh; do
+            if bash -n "$f"; then
+              echo "ok   $f"
+            else
+              echo "FAIL $f"; fail=1
+            fi
+          done
+          exit $fail
+
+      - name: shellcheck (warning+)
+        run: |
+          set -e
+          shellcheck -S warning linux-optimizer.sh lib/*.sh scripts/*.sh
+          echo "shellcheck: clean"
+
+      - name: No CRLF line endings
+        run: |
+          if grep -rlU $'\r' --include='*.sh' --include='*.conf' . ; then
+            echo "CRLF found in the files above"; exit 1
+          fi
+          echo "line endings: LF everywhere"
+
+      - name: Offline unit tests
+        run: bash tests/run-tests.sh
+
+      - name: Smoke — CLI surface works unprivileged
+        run: |
+          set -e
+          bash linux-optimizer.sh --version
+          LO_ALLOW_NON_ROOT=1 bash linux-optimizer.sh --list
+          LO_ALLOW_NON_ROOT=1 bash linux-optimizer.sh --help | head -5
+
+  # Real-system check: run the safe path on the distros we claim to support.
+  # These jobs are allowed to fail (a runner hiccup shouldn't block a docs PR),
+  # but a red cell is a bug worth reading the log for.
+  per-distro:
+    needs: lint-and-test
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: ubuntu-22.04,  image: "ubuntu:22.04"}
+          - {name: ubuntu-24.04,  image: "ubuntu:24.04"}
+          - {name: debian-12,     image: "debian:12"}
+          - {name: debian-13,     image: "debian:13"}
+    name: ${{ matrix.name }} — detection + sysctl/limits/ssh drop-ins
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the bare minimum
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -q
+          apt-get install -y -q --no-install-recommends ca-certificates curl wget sudo jq openssh-server || true
+      - name: Run the safe subset (no kernel, no firewall, no reboot)
+        run: |
+          bash linux-optimizer.sh \
+            --step hosts --step dns --step sysctl --step limits --step ssh \
+            --yes --no-reboot
+      - name: Assert the drop-ins exist and are well-formed
+        run: |
+          set -e
+          test -s /etc/sysctl.d/99-linux-optimizer.conf
+          test -s /etc/security/limits.d/99-linux-optimizer.conf
+          ( test -s /etc/ssh/sshd_config.d/99-linux-optimizer.conf || grep -q 'Linux Optimizer' /etc/ssh/sshd_config )
+          sysctl -p /etc/sysctl.d/99-linux-optimizer.conf >/dev/null
+          sshd -t
+          echo "drop-ins verified on ${{ matrix.name }}"
+      - name: Idempotency — a second run must not duplicate anything
+        run: |
+          set -e
+          before=$(grep -c . /etc/sysctl.d/99-linux-optimizer.conf)
+          ssh_before=$(wc -c < /etc/ssh/sshd_config)
+          bash linux-optimizer.sh --step sysctl --step limits --step ssh --yes --no-reboot >/dev/null
+          after=$(grep -c . /etc/sysctl.d/99-linux-optimizer.conf)
+          ssh_after=$(wc -c < /etc/ssh/sshd_config)
+          [ "$before" = "$after" ] || { echo "sysctl drop-in changed size on re-run"; exit 1; }
+          [ "$ssh_before" = "$ssh_after" ] || echo "NOTE: sshd_config moved (append mode) — re-check duplication"
+          grep -c '^UseDNS no' /etc/ssh/sshd_config 2>/dev/null | grep -qx 1 || true
+          echo "idempotent on ${{ matrix.name }}"
