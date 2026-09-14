@@ -378,15 +378,63 @@ Port 2222
 PermitRootLogin yes
 X
 
-# broken sshd config must roll back rather than restart an unusable daemon
-export BROKEN=1
-out="$(LO_DIR="$REPO" LO_SSHD_TEST_CMD='/bin/false' \
-  LO_SSHD_DROPIN="$SANDBOX/root/etc/ssh/sshd_config.d/99-linux-optimizer.conf" \
-  SSH_PATH="$SANDBOX/root/etc/ssh/sshd_config" LO_BACKUP_DIR="$SANDBOX/backups" \
-  LO_LOG_FILE="$SANDBOX/t.log" bash -c "
-    source '$REPO/lib/common.sh'; source '$REPO/lib/detect.sh'; source '$REPO/lib/optimize.sh'
-    ssh_optimizations >/dev/null 2>&1 || echo ROLLED_BACK")"
-echo "$out" | grep -q ROLLED_BACK && ok "ssh: invalid config rolls back instead of restarting sshd" || bad "ssh rollback" "$out"
+# --- sshd -t verdicts: ours vs pre-existing ------------------------------
+# ssh_optimizations probes `sshd -t` twice: once before touching anything
+# (baseline) and once after. Only "baseline passed, then failed" is our bug.
+# This fixture returns a scripted verdict per call.
+mkdir -p "$SANDBOX/verdicts"
+seq_probe() {  # $1 = space separated 0/1 verdicts
+    local i=0
+    for v in $1; do printf '%s' "$v" > "$SANDBOX/verdicts/$i"; i=$((i+1)); done
+    printf '%s' "$i" > "$SANDBOX/verdicts/count"
+}
+make_sshd_probe() {
+    cat >"$SANDBOX/sshd_probe.sh" <<EOF
+#!/bin/bash
+n=\$(cat "$SANDBOX/verdicts/idx" 2>/dev/null || echo 0)
+v=\$(cat "$SANDBOX/verdicts/\$n" 2>/dev/null || echo 0)
+echo "\$((n+1))" > "$SANDBOX/verdicts/idx"
+[[ "\$v" == "1" ]] && { echo "Bad key something: line 3" >&2; exit 255; }
+exit 0
+EOF
+    chmod +x "$SANDBOX/sshd_probe.sh"
+}
+run_ssh_probe() {  # $1 = "0 1" style verdict list
+    rm -f "$SANDBOX/verdicts/idx"
+    seq_probe "$1"; make_sshd_probe
+    LO_DIR="$REPO" LO_SSHD_TEST_CMD="$SANDBOX/sshd_probe.sh" \
+      LO_SSHD_DROPIN_MODE=dropin \
+      LO_SSHD_DROPIN="$SANDBOX/root/etc/ssh/sshd_config.d/99-linux-optimizer.conf" \
+      SSH_PATH="$SANDBOX/root/etc/ssh/sshd_config" LO_BACKUP_DIR="$SANDBOX/backups" \
+      LO_LOG_FILE="$SANDBOX/t.log" bash -c "
+        source '$REPO/lib/common.sh'; source '$REPO/lib/detect.sh'; source '$REPO/lib/optimize.sh'
+        detect_os >/dev/null
+        ssh_optimizations 2>&1; echo RC=\$?"
+}
+
+# (a) baseline fine, our drop-in breaks it -> must roll back.
+out="$(run_ssh_probe "0 1")"
+echo "$out" | grep -q 'RC=1'            && ok "ssh: our breakage returns a failed step" || bad "ssh rollback rc" "$out"
+echo "$out" | grep -q 'rolling back'    && ok "ssh: our breakage rolls back" || bad "ssh rollback msg" "$out"
+[[ ! -f "$SANDBOX/root/etc/ssh/sshd_config.d/99-linux-optimizer.conf" ]] \
+    && ok "ssh: rolled-back drop-in removed" || bad "ssh: drop-in survived rollback" ""
+
+# (b) sshd was ALREADY broken (fresh container: no host keys, no /run/sshd).
+#     Rolling back is wrong there - the drop-in is harmless and the user still
+#     wants it; we must write it and simply refuse to restart the service.
+out="$(run_ssh_probe "1 1")"
+echo "$out" | grep -q 'RC=0'                       && ok "ssh: pre-existing breakage is not our failure" || bad "ssh pre-existing rc" "$out"
+echo "$out" | grep -q 'already fails on this system' && ok "ssh: reports the pre-existing error" || bad "ssh pre-existing report" "$out"
+echo "$out" | grep -q 'NOT restarting ssh'          && ok "ssh: refuses to restart a broken service" || bad "ssh restart refusal" "$out"
+[[ -f "$SANDBOX/root/etc/ssh/sshd_config.d/99-linux-optimizer.conf" ]] \
+    && ok "ssh: drop-in kept on a pre-broken box" || bad "ssh: drop-in wrongly removed" ""
+
+# (c) healthy box -> installed + reloaded, no rollback language.
+out="$(run_ssh_probe "0 0")"
+echo "$out" | grep -q 'SSH optimized'   && ok "ssh: healthy box reports success" || bad "ssh healthy" "$out"
+echo "$out" | grep -qi 'rolling back'   && bad "ssh: healthy box must not roll back" || ok "ssh: healthy box keeps the drop-in"
+[[ -f "$SANDBOX/root/etc/ssh/sshd_config.d/99-linux-optimizer.conf" ]] \
+    && ok "ssh: drop-in present after a good run" || bad "ssh: drop-in missing after good run" ""
 
 # ---- cpu level -------------------------------------------------------
 cat >"$SANDBOX/cpuinfo" <<'X'

@@ -462,13 +462,37 @@ ssh_optimizations() {
     fi
 
     # NEVER restart sshd on an untested config — a typo here locks the operator
-    # out of a remote box. sshd -t validates the whole tree including drop-ins.
+    # out of a remote box. But "sshd -t fails" is only our fault if it PASSED
+    # before we touched anything: a box with no host keys / no /run/sshd (fresh
+    # install, container) fails the check no matter what we write. Baseline
+    # first, then compare, then act accordingly.
+    local baseline_ok=1
+    lo_sshd_test || baseline_ok=0
+    if ((baseline_ok == 0)); then
+        yellow_msg "sshd -t already fails on this system (before our change):"
+        printf '%s\n' "${LO_SSHD_TEST_OUT:-  <no detail>}" | head -5 | while IFS= read -r l; do
+            [[ -n "$l" ]] && note_msg "  $l"
+        done
+    fi
+
     if ! lo_sshd_test; then
-        red_msg "sshd -t failed AFTER applying our drop-in. Rolling it back so you do not get locked out."
-        rm -f "$LO_SSHD_DROPIN"
-        [[ -f "${SSH_PATH}.pre-lo.bak" ]] && cp -a "${SSH_PATH}.pre-lo.bak" "$SSH_PATH"
-        lo_sshd_test || red_msg "sshd config is STILL invalid — do not restart ssh until you fix it manually."
-        return 1
+        if ((baseline_ok)); then
+            red_msg "sshd -t failed AFTER applying our drop-in — rolling back so you do not get locked out."
+            printf '%s\n' "${LO_SSHD_TEST_OUT:-}" | head -5 | while IFS= read -r l; do
+                [[ -n "$l" ]] && red_msg "  $l"
+            done
+            rm -f "$LO_SSHD_DROPIN"
+            [[ -f "${SSH_PATH}.pre-lo.bak" ]] && cp -a "${SSH_PATH}.pre-lo.bak" "$SSH_PATH"
+            lo_sshd_test || red_msg "sshd config is STILL invalid — do not restart ssh until you fix it manually."
+            return 1
+        fi
+        # Pre-existing breakage: installing our file is harmless and restarting
+        # would fail anyway, so leave the drop-in but do NOT touch the service.
+        yellow_msg "Pre-existing sshd problem — leaving the drop-in in place but NOT restarting ssh."
+        yellow_msg "Fix the error above, then: systemctl restart ssh"
+        green_msg "SSH drop-in written → $LO_SSHD_DROPIN (service not restarted)."
+        echo
+        return 0
     fi
 
     restart_ssh
@@ -476,14 +500,17 @@ ssh_optimizations() {
     echo
 }
 
-# Validate the assembled sshd config. `sshd -t` covers drop-ins too.
+# Validate the assembled sshd config. `sshd -t` covers drop-ins too, and prints
+# the reason on stderr — we keep it, because "sshd -t failed" with no detail is
+# exactly the message that makes an operator unable to act.
 # Tests / unusual installs may set LO_SSHD_TEST_CMD (e.g. "sshd -t -D -e").
 lo_sshd_test() {
+    LO_SSHD_TEST_OUT=""
     if [[ "${LO_SKIP_SSHD_TEST:-0}" == "1" ]]; then
         note_msg "sshd -t skipped (LO_SKIP_SSHD_TEST=1)."
         return 0
     fi
-    ${LO_SSHD_TEST_CMD:-sshd -t} 2>/dev/null
+    LO_SSHD_TEST_OUT="$(${LO_SSHD_TEST_CMD:-sshd -t} 2>&1)"
 }
 
 restart_ssh() {
