@@ -387,9 +387,17 @@ sysctl_optimizations() {
         green_msg "Removed the stale optimizer block from /etc/sysctl.conf (backup kept)."
     fi
 
+    # Apply. In containers / locked-down kernels some keys simply do not exist
+    # or are read-only, and procfs rejects them one at a time — report exactly
+    # which, but do not treat that as a failed run.
     if have_cmd sysctl; then
-        sysctl --system >/dev/null 2>&1 || sysctl -p "$LO_SYSCTL_DROPIN" >/dev/null 2>&1 || \
-            red_msg "sysctl reported problems — check: sysctl --system 2>&1 | grep -i error"
+        local out failed
+        out="$(sysctl --system 2>&1 || true)"
+        failed="$(printf '%s\n' "$out" | grep -iE 'cannot allocate|permission denied|No such file|unknown key' | head -10)"
+        if [[ -n "$failed" ]]; then
+            note_msg "Some sysctl keys were rejected (normal in containers / on kernels without them):"
+            printf '%s\n' "$failed" | while IFS= read -r l; do note_msg "  $l"; done
+        fi
     fi
     green_msg "Network & kernel tuning applied → $LO_SYSCTL_DROPIN"
     echo

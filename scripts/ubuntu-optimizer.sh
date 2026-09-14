@@ -4,7 +4,7 @@
 # Thin wrapper kept so the historical one-liners
 #   wget .../scripts/ubuntu-optimizer.sh && bash ubuntu-optimizer.sh
 # keep working. All real logic lives in lib/; this file only verifies the
-# distro and hands control to the main script.
+# distro and hands control to the shared CLI.
 #
 # https://github.com/hawshemi/linux-optimizer
 set -o pipefail
@@ -28,10 +28,8 @@ lo_source_libs || exit 1
 check_if_running_as_root
 detect_os || exit 1
 
-# shellcheck disable=SC2194  # the case word is intentionally a constant list
-
-case "ubuntu " in
-    *" $OS_ID "*) : ;;
+case "$OS_ID" in
+    ubuntu) : ;;
     *)
         red_msg "This entry point is for Ubuntu, but you are running $(os_label)."
         echo
@@ -41,5 +39,5 @@ case "ubuntu " in
 esac
 
 lo_banner "Ubuntu detected: $(os_label)"
-export LO_RAW_BASE
-exec bash "$LO_DIR/linux-optimizer.sh" "$@"
+lo_cli_main "$@"
+exit $?

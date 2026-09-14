@@ -11,6 +11,7 @@
 #
 set -uo pipefail
 
+
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SANDBOX="$(mktemp -d "${TMPDIR:-/tmp}/lo-tests.XXXXXX")"
 trap 'rm -rf "$SANDBOX"' EXIT
@@ -74,6 +75,7 @@ fixture() {
 }
 
 detect_case() {
+    # shellcheck disable=SC2034  # label is documentation for the caller
     local label="$1" file="$2" glob="${3:-/dev/null}"
     local out
     out="$(LO_OS_RELEASE="$file" LO_RELEASE_GLOB="$glob" bash -c "
@@ -438,6 +440,7 @@ echo "$out" | grep -q "No such step" && ok "--step with a bogus name errors clea
 
 # every declared step function must actually exist
 missing=0
+# shellcheck disable=SC2034  # fam/title are read for readability, unused here
 while IFS='|' read -r name fam title fn; do
     run_opt "$PRELUDE; source '$REPO/lib/cli.sh'; declare -F $fn >/dev/null || echo MISSING:$fn" | grep -q "MISSING:$fn" && { bad "step '$name' → function '$fn' not defined"; missing=1; }
 done < <(LO_DIR="$REPO" bash -c "
@@ -482,6 +485,41 @@ fi
 for f in "$REPO/linux-optimizer.sh" "$REPO"/scripts/*.sh; do
     [[ -x "$f" ]] && ok "executable: $(basename "$f")" || bad "not executable: $f"
 done
+
+# ---- per-distro wrappers (regression: they used to reject their own distro) --
+declare -A WRAP_OK=( [ubuntu]=ubuntu [debian]=debian [fedora]=fedora [centos]=rocky )
+declare -A WRAP_FIX=(
+    [ubuntu]='NAME="Ubuntu"\nID=ubuntu\nVERSION_ID="24.04"\nVERSION_CODENAME=noble\n'
+    [debian]='NAME="Debian GNU/Linux"\nID=debian\nVERSION_ID="12"\nVERSION_CODENAME=bookworm\n'
+    [fedora]='NAME="Fedora Linux"\nID=fedora\nVERSION_ID="42"\n'
+    [rocky]='NAME="Rocky Linux"\nID="rocky"\nVERSION_ID="9.4"\n'
+)
+for w in ubuntu debian fedora centos; do
+    for id in ubuntu debian fedora rocky; do
+        printf '%b' "${WRAP_FIX[$id]}" > "$SANDBOX/os-$id"
+        out="$(LO_ALLOW_NON_ROOT=1 LO_OS_RELEASE="$SANDBOX/os-$id" \
+               bash "$REPO/scripts/$w-optimizer.sh" --list 2>&1 || true)"
+        if [[ "$id" == "${WRAP_OK[$w]}" ]]; then
+            grep -q "detected" <<<"$out" && ok "wrapper $w accepts $id" \
+                || bad "wrapper $w rejects its own distro ($id)"
+        else
+            grep -q "This entry point is for" <<<"$out" && ok "wrapper $w rejects $id" \
+                || bad "wrapper $w does not reject $id"
+        fi
+    done
+done
+
+# ---- sysctl file hygiene ----------------------------------------------
+# /proc rejects anything it does not know, so every line must be a real,
+# writable key. This one is mode 0444 in mainline and must never appear here.
+grep -qE '^net\.ipv4\.tcp_available_congestion_control *=' "$REPO/files/99-sysctl-linux-optimizer.conf" \
+    && bad "sysctl drop-in writes read-only tcp_available_congestion_control" \
+    || ok "sysctl drop-in avoids read-only tcp_available_congestion_control"
+
+# duplicated keys are silently last-wins, which hides mistakes
+dupkeys="$(grep -oE '^[a-z][a-z0-9._]+ *=' "$REPO/files/99-sysctl-linux-optimizer.conf" | tr -d ' =' | sort | uniq -d)"
+[[ -z "$dupkeys" ]] && ok "sysctl drop-in has no duplicate keys" \
+    || bad "sysctl duplicate keys: $(tr '\n' ' ' <<<"$dupkeys")"
 
 # ===========================================================================
 echo
