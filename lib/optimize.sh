@@ -519,12 +519,23 @@ limits_optimizations() {
 # DNS — stop scribbling on /etc/resolv.conf (it is a symlink owned by
 # resolved/NetworkManager on every modern distro and gets clobbered on boot).
 # ---------------------------------------------------------------------------
+resolved_running() {
+    # Overridable for tests: whether systemd-resolved is active is a property of
+    # the machine running the script (a CI runner may really have it active), so
+    # tests must pin it to exercise both branches deterministically.
+    if [[ -n "${LO_RESOLVED_ACTIVE:-}" ]]; then
+        [[ "$LO_RESOLVED_ACTIVE" == "1" ]]
+        return
+    fi
+    systemctl is-active systemd-resolved >/dev/null 2>&1
+}
+
 fix_dns() {
     : "${LO_DNS_SERVERS:=1.1.1.1 8.8.8.8}"
     echo
     yellow_msg "Configuring fallback DNS (${LO_DNS_SERVERS})..."
 
-    if systemctl is-active systemd-resolved >/dev/null 2>&1; then
+    if resolved_running; then
         mkdir -p "$(dirname "$LO_RESOLVED_DROPIN")"
         {
             managed_header "DNS (Linux Optimizer)" "systemd/resolved.conf.d"

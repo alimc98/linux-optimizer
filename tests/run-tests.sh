@@ -278,18 +278,27 @@ after="$(cat "$SANDBOX/root/etc/hosts")"
 assert_eq "hosts: running 3x is idempotent" "$after" "$before"
 
 # ---- DNS -------------------------------------------------------------
-# No systemd-resolved in a container: must write a real resolv.conf, and must
-# NOT scribble when resolv.conf is a resolved-managed symlink.
+# Two branches, and which one runs depends on the *machine* (a CI runner may
+# really have systemd-resolved active), so pin LO_RESOLVED_ACTIVE per case.
+# Branch A: no resolved -> write a real resolv.conf, back the original up.
 printf 'nameserver 192.168.1.1\n' > "$SANDBOX/root/etc/resolv.conf"
-run_opt "$PRELUDE; fix_dns" >/dev/null
+run_opt "LO_RESOLVED_ACTIVE=0; $PRELUDE; fix_dns" >/dev/null
 assert_grep "dns: fallback servers written" "$SANDBOX/root/etc/resolv.conf" "nameserver 1\.1\.1\.1"
 assert_grep "dns: original kept as backup" "$SANDBOX/root/etc/resolv.conf.pre-lo.bak" "192\.168\.1\.1"
+assert_not "dns: no resolved drop-in written" "$SANDBOX/root/etc/systemd/resolved.conf.d/99-linux-optimizer.conf" "DNS="
+
+# Branch B: resolved active -> drop-in only, /etc/resolv.conf untouched.
+printf 'nameserver 192.168.1.1\n' > "$SANDBOX/root/etc/resolv.conf"
+run_opt "LO_RESOLVED_ACTIVE=1; $PRELUDE; fix_dns" >/dev/null
+assert_grep "dns: resolved drop-in written" "$SANDBOX/root/etc/systemd/resolved.conf.d/99-linux-optimizer.conf" "^DNS=1\.1\.1\.1 8\.8\.8\.8"
+assert_grep "dns: resolved drop-in sets DoT opportunistic" "$SANDBOX/root/etc/systemd/resolved.conf.d/99-linux-optimizer.conf" "^DNSOverTLS=opportunistic"
+assert_not "dns: resolv.conf left alone when resolved is active" "$SANDBOX/root/etc/resolv.conf" "1\.1\.1\.1"
 
 cp "$SANDBOX/root/etc/resolv.conf" "$SANDBOX/resolv.real"
 printf 'nameserver 127.0.0.53\noptions edns0\n' > "$SANDBOX/stub-resolv.conf"
 rm -f "$SANDBOX/root/etc/resolv.conf"
 if ln -s "$SANDBOX/stub-resolv.conf" "$SANDBOX/root/etc/resolv.conf" 2>/dev/null && [[ -L "$SANDBOX/root/etc/resolv.conf" ]]; then
-    run_opt "$PRELUDE; fix_dns" >"$SANDBOX/sym.out" 2>&1
+    run_opt "LO_RESOLVED_ACTIVE=0; $PRELUDE; fix_dns" >"$SANDBOX/sym.out" 2>&1
     assert_grep "dns: leaves a resolved-managed symlink alone" "$SANDBOX/sym.out" "is a symlink"
     assert_not "dns: symlink target was not overwritten" "$SANDBOX/stub-resolv.conf" "1\.1\.1\.1"
 else
