@@ -224,7 +224,7 @@ lo_cli_main() {
     check_if_running_as_root
     detect_os || {
         red_msg "Unsupported operating system — open an issue if you think we should add it:"
-        red_msg "  https://github.com/hawshemi/linux-optimizer/issues"
+        red_msg "  https://github.com/alimc98/linux-optimizer/issues"
         return 1
     }
 
@@ -237,7 +237,7 @@ lo_cli_main() {
 
     mkdir -p "$LO_BACKUP_DIR" 2>/dev/null || true
     if [[ "${LO_OFFLINE:-1}" != "1" ]]; then
-        note_msg "Modules were downloaded to ${LO_DIR} — for a full audit use: git clone https://github.com/hawshemi/linux-optimizer"
+        note_msg "Modules were downloaded to ${LO_DIR} — for a full audit use: git clone https://github.com/alimc98/linux-optimizer"
     fi
 
     if ((${#LO_RUN_PLAN[@]})); then
