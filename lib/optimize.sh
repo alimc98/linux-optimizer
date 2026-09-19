@@ -382,7 +382,7 @@ sysctl_optimizations() {
         backup_once "$LO_SYSCTL_MAIN"
         sed -i -e '/# \/etc\/sysctl.conf/d' \
                -e '/These parameters in this file will be added/d' \
-               -e '/hawshemi\/Linux-Optimizer/d' \
+               -e '/alimc98\/Linux-Optimizer/d' \
                -e '/^######/d' "$LO_SYSCTL_MAIN"
         green_msg "Removed the stale optimizer block from /etc/sysctl.conf (backup kept)."
     fi
