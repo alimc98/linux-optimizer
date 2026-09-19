@@ -7,7 +7,7 @@
 #
 # Sets LO_DIR and LO_OFFLINE, then sources common/detect/optimize.
 
-LO_RAW_BASE="${LO_RAW_BASE:-https://raw.githubusercontent.com/hawshemi/linux-optimizer/main}"
+LO_RAW_BASE="${LO_RAW_BASE:-https://raw.githubusercontent.com/alimc98/linux-optimizer/main}"
 LO_MODULE_FILES=(
     lib/common.sh
     lib/detect.sh
@@ -65,7 +65,7 @@ lo_bootstrap() {
     # 3. One tarball request is much friendlier than N raw requests.
     mkdir -p "$cache" || return 1
     local tgz="$cache/main.tgz"
-    if _lo_fetch "https://codeload.github.com/hawshemi/linux-optimizer/tar.gz/refs/heads/main" "$tgz"; then
+    if _lo_fetch "https://codeload.github.com/alimc98/linux-optimizer/tar.gz/refs/heads/main" "$tgz"; then
         if tar xzf "$tgz" -C "$cache" --strip-components=1 2>/dev/null && [[ -f "$cache/lib/common.sh" ]]; then
             rm -f "$tgz"
             LO_DIR="$cache"; export LO_OFFLINE=0
