@@ -329,11 +329,11 @@ assert_eq "sysctl: exactly one tcp_congestion_control line" "$n2" "1"
 {
   echo "# /etc/sysctl.conf"
   echo "fs.file-max = 67108864"
-  echo "# Read More: https://github.com/hawshemi/Linux-Optimizer/blob/main/files/sysctl.conf"
+  echo "# Read More: https://github.com/alimc98/Linux-Optimizer/blob/main/files/sysctl.conf"
   echo "######"
 } > "$SANDBOX/root/etc/sysctl.conf"
 run_opt "$PRELUDE; sysctl_optimizations" >/dev/null 2>&1
-assert_not "sysctl: legacy block removed from /etc/sysctl.conf" "$SANDBOX/root/etc/sysctl.conf" "hawshemi/Linux-Optimizer"
+assert_not "sysctl: legacy block removed from /etc/sysctl.conf" "$SANDBOX/root/etc/sysctl.conf" "alimc98/Linux-Optimizer"
 assert_file "sysctl: legacy /etc/sysctl.conf was backed up" "$SANDBOX/root/etc/sysctl.conf.pre-lo.bak"
 
 # ---- limits ----------------------------------------------------------
