@@ -46,7 +46,7 @@ Every step is **idempotent** — running the script ten times is identical to ru
 
 ```bash
 sudo -i
-wget -qO- https://raw.githubusercontent.com/hawshemi/linux-optimizer/main/linux-optimizer.sh | bash
+wget -qO- https://raw.githubusercontent.com/alimc98/linux-optimizer/main/linux-optimizer.sh | bash
 ```
 
 The interactive menu appears. Pick **1** to apply everything.
@@ -55,7 +55,7 @@ Prefer to read before running (recommended on a production box)?
 
 ```bash
 sudo -i
-git clone https://github.com/hawshemi/linux-optimizer && cd linux-optimizer
+git clone https://github.com/alimc98/linux-optimizer && cd linux-optimizer
 bash linux-optimizer.sh --list      # see exactly what it would do
 bash linux-optimizer.sh             # menu
 ```
