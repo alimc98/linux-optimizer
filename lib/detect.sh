@@ -126,7 +126,7 @@ support_warning() {
             fi
             ;;
         *)
-            red_msg "Unknown OS '${OS_NAME}'. Create an issue: https://github.com/hawshemi/linux-optimizer/issues"
+            red_msg "Unknown OS '${OS_NAME}'. Create an issue: https://github.com/alimc98/linux-optimizer/issues"
             return 1
             ;;
     esac
