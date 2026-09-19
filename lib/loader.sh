@@ -80,7 +80,7 @@ lo_bootstrap() {
         if ! _lo_fetch "$LO_RAW_BASE/$f" "$cache/$f"; then
             echo "[!] Could not download '$f' from $LO_RAW_BASE" >&2
             echo "    GitHub may be blocked on this network, or the branch moved." >&2
-            echo "    Offline route: git clone https://github.com/hawshemi/linux-optimizer" >&2
+            echo "    Offline route: git clone https://github.com/alimc98/linux-optimizer" >&2
             echo "                     cd linux-optimizer && bash linux-optimizer.sh" >&2
             return 1
         fi
