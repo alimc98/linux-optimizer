@@ -1,6 +1,6 @@
 #!/bin/bash
 # Linux Optimizer — shared helpers
-# https://github.com/hawshemi/linux-optimizer
+# https://github.com/alimc98/linux-optimizer
 #
 # Sourced by linux-optimizer.sh. Nothing here runs on source.
 
@@ -62,7 +62,7 @@ note_msg()   { echo "      $*"; _log "NOTE: $*"; }
 lo_banner() {
     echo
     green_msg "${C_BOLD}=========================================================${C_OFF}"
-    green_msg " Linux Optimizer v${LO_VERSION} — https://github.com/hawshemi/linux-optimizer"
+    green_msg " Linux Optimizer v${LO_VERSION} — https://github.com/alimc98/linux-optimizer"
     green_msg " ${1:-Tested on: Ubuntu 22.04+, Debian 12+, Fedora 42+, RHEL-family 8+}"
     green_msg " Root access is required. Read the README before option 1/2 (kernel)."
     green_msg "${C_BOLD}=========================================================${C_OFF}"
@@ -268,6 +268,6 @@ managed_header() {
 # Managed by Linux Optimizer v${LO_VERSION} — do not edit in place.
 # Your own edits belong in a file that sorts AFTER this one
 # (e.g. /etc/${2}/zz-local.conf) or in ${LO_CONFIG_DIR}/local/*.conf
-# Source: https://github.com/hawshemi/linux-optimizer
+# Source: https://github.com/alimc98/linux-optimizer
 EOF
 }
