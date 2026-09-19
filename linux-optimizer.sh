@@ -6,10 +6,10 @@
 #   CloudLinux 8+
 #
 # One-liner (as root):
-#   bash <(wget -qO- https://raw.githubusercontent.com/hawshemi/linux-optimizer/main/linux-optimizer.sh)
+#   bash <(wget -qO- https://raw.githubusercontent.com/alimc98/linux-optimizer/main/linux-optimizer.sh)
 #
 # ...but a real clone is safer (offline-capable, auditable before running):
-#   git clone https://github.com/hawshemi/linux-optimizer && cd linux-optimizer && sudo bash linux-optimizer.sh
+#   git clone https://github.com/alimc98/linux-optimizer && cd linux-optimizer && sudo bash linux-optimizer.sh
 #
 # MIT licensed. Read the README's NOTES before using --kernel.
 #
@@ -33,7 +33,7 @@ _self_dir() {
 }
 
 LO_ENTRY_DIR="$(_self_dir)"
-LO_RAW_BASE="${LO_RAW_BASE:-https://raw.githubusercontent.com/hawshemi/linux-optimizer/main}"
+LO_RAW_BASE="${LO_RAW_BASE:-https://raw.githubusercontent.com/alimc98/linux-optimizer/main}"
 
 _loader=""
 for _cand in "$LO_ENTRY_DIR/lib/loader.sh" "$LO_ENTRY_DIR/../lib/loader.sh"; do
@@ -46,7 +46,7 @@ if [[ -z "$_loader" ]]; then
     if ! (command -v curl >/dev/null && curl -fsSL --max-time 45 -o "$_loader" "$LO_RAW_BASE/lib/loader.sh") \
        && ! (command -v wget >/dev/null && wget -q -T 45 -O "$_loader" "$LO_RAW_BASE/lib/loader.sh"); then
         echo "[!] Cannot reach $LO_RAW_BASE and lib/ is not next to this script." >&2
-        echo "    Offline route: git clone https://github.com/hawshemi/linux-optimizer && cd linux-optimizer && bash linux-optimizer.sh" >&2
+        echo "    Offline route: git clone https://github.com/alimc98/linux-optimizer && cd linux-optimizer && bash linux-optimizer.sh" >&2
         exit 1
     fi
 fi
