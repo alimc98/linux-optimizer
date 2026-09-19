@@ -6,11 +6,11 @@
 # keep working. All real logic lives in lib/; this file only verifies the
 # distro and hands control to the shared CLI.
 #
-# https://github.com/hawshemi/linux-optimizer
+# https://github.com/alimc98/linux-optimizer
 set -o pipefail
 
 _here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." >/dev/null 2>&1 && pwd)"
-LO_RAW_BASE="${LO_RAW_BASE:-https://raw.githubusercontent.com/hawshemi/linux-optimizer/main}"
+LO_RAW_BASE="${LO_RAW_BASE:-https://raw.githubusercontent.com/alimc98/linux-optimizer/main}"
 
 _loader="$_here/lib/loader.sh"
 if [[ ! -f "$_loader" ]]; then
